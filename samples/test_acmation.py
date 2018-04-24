@@ -21,10 +21,12 @@ def test_char():
     acp.add("more able", meta_data={'id': 2})
     acp.add("we are", meta_data={'id': 3})
     acp.add("are")
+    acp.add("你")
+    acp.add("你好")
     acp.add('....', meta_data={'id': 5})
     acp.finalize()
-    content = """we are family, we are more able to .... """
-    for i in acp.search(content, greedy=False):
+    content = """we are family, we are more able to 你好.... """
+    for i in acp.search(content, greedy=True):
         print(i)
 
 
