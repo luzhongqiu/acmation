@@ -8,5 +8,5 @@ setup(
     license='mit',
     author='zq',
     author_email='luzhongqiu@patsnap.com',
-    description='ac automation'
+    description='ac automation, sample: http://git.patsnap.com/zhongqiu.lu/acmation'
 )
