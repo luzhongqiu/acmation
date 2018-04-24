@@ -2,8 +2,8 @@ from setuptools import setup, find_packages
 
 setup(
     name='acmation',
-    version='v0.1',
-    packages=find_packages,
+    version='0.1',
+    packages=find_packages(),
     url='http://git.patsnap.com/zhongqiu.lu/acmation',
     license='mit',
     author='zq',

@@ -1,5 +1,5 @@
 # -*- encoding: utf-8 -*-
-from src.acmation import KeywordTree
+from acmation import KeywordTree
 
 
 def test_word():
