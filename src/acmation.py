@@ -1,4 +1,6 @@
 import json
+
+
 class State(object):
     __slots__ = ['identifier', 'symbol', 'success', 'transitions', 'parent',
                  'matched_keyword', 'longest_strict_suffix', 'meta_data']
@@ -21,7 +23,7 @@ class Result(object):
             setattr(self, k, v)
 
     def __str__(self):
-        return_str= ''
+        return_str = ''
         for k in self.__slots__:
             return_str += '{}:{:<20}\t'.format(k, json.dumps(getattr(self, k)))
         return return_str
