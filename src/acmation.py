@@ -1,75 +1,193 @@
-# 结点类
-class node:
-    def __init__(self, ch):
-        self.ch = ch  # 结点值
-        self.fail = None  # Fail指针
-        self.tail = 0  # 尾标志：标志为 i 表示第 i 个模式串串尾
-        self.child = []  # 子结点
-        self.childvalue = []  # 子结点的值
+import json
+class State(object):
+    __slots__ = ['identifier', 'symbol', 'success', 'transitions', 'parent',
+                 'matched_keyword', 'longest_strict_suffix', 'meta_data']
+
+    def __init__(self, identifier, symbol=None, parent=None, success=False):
+        self.symbol = symbol
+        self.identifier = identifier
+        self.transitions = {}
+        self.parent = parent
+        self.success = success
+        self.matched_keyword = None
+        self.longest_strict_suffix = None
 
 
-# AC自动机类
-class acmation:
-    def __init__(self):
-        self.root = node("")  # 初始化根结点
-        self.count = 0  # 模式串个数
+class Result(object):
+    __slots__ = ['keyword', 'location', 'meta_data']
 
-    # 第一步：模式串建树
-    def insert(self, strkey_id, strkey):
-        self.count = strkey_id  # id
-        p = self.root
-        for i in strkey:
-            if i not in p.childvalue:  # 若字符不存在，添加子结点
-                child = node(i)
-                p.child.append(child)
-                p.childvalue.append(i)
-                p = child
-            else:  # 否则，转到子结点
-                p = p.child[p.childvalue.index(i)]
-        p.tail = self.count  # 修改尾标志
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
-    # 第二步：修改Fail指针
-    def ac_automation(self):
-        queuelist = [self.root]  # 用列表代替队列
-        while len(queuelist):  # BFS遍历字典树
-            temp = queuelist[0]
-            queuelist.remove(temp)  # 取出队首元素
-            for i in temp.child:
-                if temp == self.root:  # 根的子结点Fail指向根自己
-                    i.fail = self.root
-                else:
-                    p = temp.fail  # 转到Fail指针
-                    while p:
-                        if i.ch in p.childvalue:  # 若结点值在该结点的子结点中，则将Fail指向该结点的对应子结点
-                            i.fail = p.child[p.childvalue.index(i.ch)]
-                            break
-                        p = p.fail  # 否则，转到Fail指针继续回溯
-                    if not p:  # 若p==None，表示当前结点值在之前都没出现过，则其Fail指向根结点
-                        i.fail = self.root
-                queuelist.append(i)  # 将当前结点的所有子结点加到队列中
+    def __str__(self):
+        return_str= ''
+        for k in self.__slots__:
+            return_str += '{}:{:<20}\t'.format(k, json.dumps(getattr(self, k)))
+        return return_str
 
-    # 第三步：模式匹配
-    def runkmp(self, strmode):
-        p = self.root
-        cnt = {}  # 使用字典记录成功匹配的状态
-        for i in strmode:  # 遍历目标串
 
-            while i not in p.childvalue and p is not self.root:
-                p = p.fail
-            if i in p.childvalue:  # 若找到匹配成功的字符结点，则指向那个结点，否则指向根结点
-                p = p.child[p.childvalue.index(i)]
+class KeywordTree(object):
+    def __init__(self, case_insensitive=False):
+        '''
+        @param case_insensitive: If true, case will be ignored when searching.
+                                 Setting this to true will have a positive
+                                 impact on performance.
+                                 Defaults to false.
+        '''
+        self._zero_state = State(0)
+        self._counter = 1
+        self._finalized = False
+        self._case_insensitive = case_insensitive
+
+    def add(self, keywords, meta_data={}):
+        '''
+        Add a keyword to the tree.
+        Can only be used before finalize() has been called.
+        Keyword should be str or unicode.
+        '''
+        if self._finalized:
+            raise ValueError('KeywordTree has been finalized.' +
+                             ' No more keyword additions allowed')
+        original_keyword = keywords
+        if self._case_insensitive:
+            if isinstance(keywords, list):
+                keywords = map(str.lower, keywords)
+            elif isinstance(keywords, str):
+                keywords = keywords.lower()
             else:
-                p = self.root
-            temp = p
-            while temp is not self.root:
-                if temp.tail:  # id 为 0 不处理
-                    if temp.tail not in cnt:
-                        cnt.setdefault(temp.tail)
-                        cnt[temp.tail] = 1
-                    else:
-                        cnt[temp.tail] += 1
-                temp = temp.fail
-        return cnt  # 返回匹配状态
-        # 如果只需要知道是否匹配成功，则return bool(cnt)即可
-        # 如果需要知道成功匹配的模式串种数，则return len(cnt)即可
+                raise Exception('keywords error')
+        if len(keywords) <= 0:
+            return
+        current_state = self._zero_state
+        for word in keywords:
+            try:
+                current_state = current_state.transitions[word]
+            except KeyError:
+                next_state = State(self._counter, parent=current_state,
+                                   symbol=word)
+                self._counter += 1
+                current_state.transitions[word] = next_state
+                current_state = next_state
+        current_state.success = True
+        current_state.matched_keyword = original_keyword
+        current_state.meta_data = meta_data
 
+    def search(self, text, greedy=False, cut_word=False, cut_separator=' '):
+        '''
+
+        :param text:
+        :param greedy:
+        :param cut_word:
+        :param cut_separator:
+        :return:
+        '''
+        gen = self._search(text, cut_word, cut_separator)
+        pre = None
+        for result in gen:
+            assert isinstance(result, Result)
+            if not greedy:
+                yield result
+                continue
+            if pre is None:
+                pre = result
+
+            if result.location > pre.location:
+                yield pre
+                pre = result
+                continue
+
+            if len(result.keyword) > len(pre.keyword):
+                pre = result
+                continue
+        if pre is not None:
+            yield pre
+
+    def _search(self, text, cut_word=False, cut_separator=' '):
+        '''
+        Search a text for all occurences of the added keywords.
+        Can only be called after finalized() has been called.
+        O(n) with n = len(text)
+        @return: Generator used to iterate over the results.
+                 Or None if no keyword was found in the text.
+        '''
+        if not self._finalized:
+            raise ValueError('KeywordTree has not been finalized.' +
+                             ' No search allowed. Call finalize() first.')
+
+        if self._case_insensitive:
+            if isinstance(text, list):
+                text = map(str.lower, text)
+            elif isinstance(text, str):
+                text = text.lower()
+            else:
+                raise Exception('context type error')
+
+        if cut_word:
+            if isinstance(text, str):
+                text = text.split(cut_separator)
+
+        current_state = self._zero_state
+        for idx, symbol in enumerate(text):
+            current_state = current_state.transitions.get(
+                symbol, self._zero_state.transitions.get(symbol,
+                                                         self._zero_state))
+            state = current_state
+            while state != self._zero_state:
+                if state.success:
+                    keyword = state.matched_keyword
+                    yield Result(**{
+                        'keyword': keyword,
+                        'location': idx - len(keyword) + 1,
+                        'meta_data': state.meta_data
+                    })
+                    # yield (keyword, idx - len(keyword) + 1, state.meta_data)
+                state = state.longest_strict_suffix
+
+    def finalize(self):
+        '''
+        Needs to be called after all keywords have been added and
+        before any searching is performed.
+        '''
+        if self._finalized:
+            raise ValueError('KeywordTree has already been finalized.')
+        self._zero_state.longest_strict_suffix = self._zero_state
+        self.search_lss_for_children(self._zero_state)
+        self._finalized = True
+
+    def __str__(self):
+        return "ahocorapy KeywordTree"
+
+    def search_lss_for_children(self, zero_state):
+        processed = set()
+        to_process = [zero_state]
+        while to_process:
+            state = to_process.pop()
+            processed.add(state.identifier)
+            for child in state.transitions.values():
+                if child.identifier not in processed:
+                    self.search_lss(child)
+                    to_process.append(child)
+
+    def search_lss(self, state):
+        if state.longest_strict_suffix is None:
+            parent = state.parent
+            traversed = parent.longest_strict_suffix
+            while True:
+                if state.symbol in traversed.transitions and \
+                                traversed.transitions[state.symbol] != state:
+                    state.longest_strict_suffix = \
+                        traversed.transitions[state.symbol]
+                    break
+                elif traversed == self._zero_state:
+                    state.longest_strict_suffix = self._zero_state
+                    break
+                else:
+                    traversed = traversed.longest_strict_suffix
+            suffix = state.longest_strict_suffix
+            if suffix.longest_strict_suffix is None:
+                self.search_lss(suffix)
+            for symbol, next_state in suffix.transitions.items():
+                if (symbol not in state.transitions and
+                            suffix != self._zero_state):
+                    state.transitions[symbol] = next_state
