@@ -7,3 +7,5 @@ this ac automation support some feature
 
 road map
 - support load data from redis
+
+Thanks much for https://github.com/abusix/ahocorapy  
